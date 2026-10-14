@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write   # diagnostics are attached to a DRAFT (non-public) release; final APKs to a public release
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -37,7 +37,9 @@ jobs:
       - name: Check string resources (English + Hindi)
         run: python3 scripts/gen_strings.py && git diff --exit-code app/src/main/res/values app/src/main/res/values-hi
       - name: Unit tests
-        run: ./gradlew --no-daemon --stacktrace test
+        run: |
+          set -o pipefail; mkdir -p ci-logs
+          ./gradlew --no-daemon --stacktrace test 2>&1 | tee ci-logs/unit-tests.log
       - name: Report unit-test failures
         if: failure()
         run: |
@@ -51,7 +53,9 @@ jobs:
           PY
           done
       - name: Build APKs (debug + optimized release)
-        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:assembleRelease
+        run: |
+          set -o pipefail; mkdir -p ci-logs
+          ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:assembleRelease 2>&1 | tee ci-logs/build.log
       - name: Check native libraries
         run: |
           set -e
@@ -88,6 +92,10 @@ jobs:
           path: |
             **/build/reports/
             **/build/test-results/
+      - name: Upload diagnostics
+        if: always()
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: bash .github/scripts/diagnostics.sh build ci-logs $(find . -path '*/test-results/*' -name '*.xml' 2>/dev/null | head -50)
 
   bench:
     runs-on: ubuntu-latest
@@ -115,13 +123,18 @@ jobs:
           : > bench.txt
           for m in tiny.en base.en base; do
             echo "== ggml-$m.bin" | tee -a bench.txt
-            ASTRA_REFERENCE="$JFK_TEXT" ASTRA_THREADS=4 ./scripts/verify-native.sh /tmp/models/ggml-$m.bin /tmp/models/jfk.wav 2>&1 | grep -E "^(backend|engine|BENCH)" | sed "s/^/[$m] /" | tee -a bench.txt
+            ASTRA_REFERENCE="$JFK_TEXT" ASTRA_THREADS=4 ./scripts/verify-native.sh /tmp/models/ggml-$m.bin /tmp/models/jfk.wav > bench-$m.log 2>&1 || { tail -60 bench-$m.log; exit 1; }
+            grep -E "^(backend|engine|BENCH)" bench-$m.log | sed "s/^/[$m] /" | tee -a bench.txt
           done
           grep BENCH bench.txt | while IFS= read -r l; do echo "::notice title=Benchmark::$l"; done
           ! grep -E "WER=0\.[3-9]|WER=[1-9]" bench.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: bench, path: bench.txt }
+      - name: Upload diagnostics
+        if: always()
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: bash .github/scripts/diagnostics.sh bench bench.txt bench-*.log
 
   emulator:
     runs-on: ubuntu-latest
@@ -155,8 +168,8 @@ jobs:
           disable-animations: true
           script: |
             adb logcat -c || true
-            ./gradlew --no-daemon :app:connectedDebugAndroidTest || (adb logcat -d -s AndroidRuntime:E ASTRA-BENCH:I TestRunner:* > emulator-log.txt; exit 1)
-            adb logcat -d -s ASTRA-BENCH:I AndroidRuntime:E > emulator-log.txt || true
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest > gradle-connected.log 2>&1 || (adb logcat -d > emulator-log.txt; exit 1)
+            adb logcat -d > emulator-log.txt || true
       - name: Report emulator results
         if: always()
         run: |
@@ -173,6 +186,10 @@ jobs:
           print(f"::notice title=Instrumented tests::{r.get('tests')} tests, {r.get('failures')} failures, {r.get('skipped')} skipped ({sys.argv[1].split('/')[-1]})")
           PY
           done
+      - name: Upload diagnostics
+        if: always()
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: bash .github/scripts/diagnostics.sh emulator emulator-log.txt gradle-connected.log app/build/outputs/androidTest-results
       - uses: actions/upload-artifact@v4
         if: always()
         with:
