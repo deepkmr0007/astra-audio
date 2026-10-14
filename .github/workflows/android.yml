@@ -1,0 +1,107 @@
+# Builds and tests ASTRA Audio–Text on GitHub's hosted runners (which include the Android SDK).
+# Every push to main that passes all tests publishes the debug APK as a GitHub Release, so it can be
+# downloaded straight to a phone from the repository's "Releases" page.
+name: Android CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      ASTRA_BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install NDK and CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+
+      - name: Check string resources (English + Hindi)
+        run: python3 scripts/gen_strings.py && git diff --exit-code app/src/main/res/values app/src/main/res/values-hi
+
+      - name: Unit tests (privacy gateway, crypto, metrics, exporters, bypass scan, VAD, …)
+        run: ./gradlew --no-daemon --stacktrace test
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Check native libraries (no network symbols, 16 KB pages)
+        run: |
+          set -e
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          mkdir -p /tmp/apk && unzip -q -o "$APK" 'lib/*' -d /tmp/apk
+          ls -la /tmp/apk/lib/*/
+          NM="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
+          for so in /tmp/apk/lib/*/*.so; do
+            if "$NM" -D --undefined-only "$so" | grep -E ' (socket|connect|getaddrinfo|gethostbyname|curl_)'; then
+              echo "::error::$so references networking symbols"; exit 1
+            fi
+          done
+
+      - name: Lint
+        run: ./gradlew --no-daemon :app:lintDebug
+        continue-on-error: true
+
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/debug/*.apk "out/ASTRA-AudioText-build${{ github.run_number }}.apk"
+          sha256sum out/*.apk | tee out/SHA256SUMS.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: astra-audio-text-apk
+          path: out/
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            **/build/reports/
+            **/build/test-results/
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: astra-audio-text-apk
+          path: out
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-${{ github.run_number }}"
+          gh release create "$TAG" out/*.apk out/SHA256SUMS.txt \
+            --repo "${{ github.repository }}" --target "${{ github.sha }}" \
+            --title "ASTRA Audio–Text — build ${{ github.run_number }}" \
+            --notes "Debug build from commit ${{ github.sha }}. Install on Android 8.0+ (allow installs from your browser/file manager). Signed with the repository's public debug key, so newer builds install over older ones. SHA-256 in SHA256SUMS.txt." \
+            --latest
