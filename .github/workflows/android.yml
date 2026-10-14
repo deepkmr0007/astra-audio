@@ -69,6 +69,7 @@ jobs:
             if "$NM" -D --undefined-only "$so" | grep -E ' (socket|connect|getaddrinfo|gethostbyname|curl_)'; then
               echo "::error::$so references networking symbols"; exit 1
             fi
+            case "$so" in *armeabi-v7a*|*/x86/*) continue;; esac   # 16 KB pages only exist on 64-bit devices
             if "$RE" -lW "$so" | awk '$1=="LOAD"{print $NF}' | grep -qv '0x4000'; then
               echo "::warning::$so is not 16 KB page aligned"
             fi
@@ -179,9 +180,12 @@ jobs:
             adb logcat -d > emulator-log.txt || true
       - name: Report emulator results
         if: always()
+        shell: bash {0}   # reporting must never fail the job by itself
         run: |
           grep -h "ASTRA-BENCH" emulator-log.txt 2>/dev/null | sed 's/^.*ASTRA-BENCH: //' | while IFS= read -r l; do echo "::notice title=On-device (emulator) benchmark::$l"; done
-          grep -h "FATAL EXCEPTION" -A6 emulator-log.txt 2>/dev/null | tr '\n' ' ' | head -c 1500 | sed 's/^/::error title=Crash on emulator::/' ; echo
+          if grep -q "FATAL EXCEPTION" emulator-log.txt 2>/dev/null; then
+            echo "::error title=Crash on emulator::$(grep -h 'FATAL EXCEPTION' -A6 emulator-log.txt | tr '\n' ' ' | head -c 1500)"
+          fi
           for f in $(find app/build/outputs/androidTest-results -name '*.xml' 2>/dev/null); do
             python3 - "$f" <<'PY'
           import sys, xml.etree.ElementTree as ET
@@ -193,6 +197,7 @@ jobs:
           print(f"::notice title=Instrumented tests::{r.get('tests')} tests, {r.get('failures')} failures, {r.get('skipped')} skipped ({sys.argv[1].split('/')[-1]})")
           PY
           done
+          exit 0
       - name: Upload diagnostics
         if: always()
         env: { GH_TOKEN: "${{ github.token }}" }
@@ -218,6 +223,9 @@ jobs:
       - uses: actions/download-artifact@v4
         continue-on-error: true
         with: { name: bench, path: bench }
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: emulator, path: emu }
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -230,6 +238,10 @@ jobs:
             echo "Checks in this run: unit tests ✅ · on-device emulator tests: ${{ needs.emulator.result }} · real-model benchmark: ${{ needs.bench.result }}"
             echo
             if [ -f bench/bench.txt ]; then echo '**Benchmark on the CI runner CPU (x86, 4 threads — phone numbers differ):**'; echo '```'; grep BENCH bench/bench.txt | sed 's/ text=.*//'; echo '```'; fi
+            if [ -f emu/emulator-log.txt ] && grep -q ASTRA-BENCH emu/emulator-log.txt; then
+              echo; echo '**On-device speech recognition test (Android 14 emulator, x86-64, 2 cores, real tiny.en model):**'; echo '```'
+              grep -h ASTRA-BENCH emu/emulator-log.txt | sed 's/^.*ASTRA-BENCH: //; s/ text=.*//'; echo '```'
+            fi
             echo
             echo "SHA-256 checksums are in SHA256SUMS.txt. Commit: ${{ github.sha }}"
           } > notes.md
