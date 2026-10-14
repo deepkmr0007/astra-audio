@@ -43,7 +43,13 @@ set(WHISPER_SDL2 OFF CACHE BOOL "" FORCE)
 set(WHISPER_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)        # ggml's own thread pool; avoids shipping libomp
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)        # never tune for the build machine
-set(GGML_LLAMAFILE ON CACHE BOOL "" FORCE)      # faster tiled matmul kernels (sgemm)
+# llamafile tiled matmul kernels (sgemm): faster on arm64/x86_64; they need FP16 vector intrinsics that
+# 32-bit ARM (armeabi-v7a) does not have, so that ABI keeps the plain kernels.
+if(ANDROID AND ANDROID_ABI STREQUAL "armeabi-v7a")
+    set(GGML_LLAMAFILE OFF CACHE BOOL "" FORCE)
+else()
+    set(GGML_LLAMAFILE ON CACHE BOOL "" FORCE)
+endif()
 set(GGML_CPU ON CACHE BOOL "" FORCE)
 set(GGML_RPC OFF CACHE BOOL "" FORCE)
 set(GGML_VULKAN OFF CACHE BOOL "" FORCE)

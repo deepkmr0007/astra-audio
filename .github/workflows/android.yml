@@ -113,17 +113,24 @@ jobs:
           curl -sSfL -o ggml-base.bin    "$HF/ggml-base.bin"
           curl -sSfL -o jfk.wav "$JFK"
           printf '%s  %s\n' c78c86eb1a8faa21b369bcd33207cc90d64ae9df ggml-tiny.en.bin 137c40403d78fd54d454da0f9bd998f78703390c ggml-base.en.bin 465707469ff3a37a2b9b8d8f89f2f99de7299dac ggml-base.bin | sha1sum -c -
-      - name: Prepare Kotlin compiler (from the Gradle wrapper distribution)
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the native library for this runner
         run: |
-          ./gradlew --no-daemon --version > /dev/null
-          echo "GRADLE_HOME=$(dirname "$(dirname "$(find ~/.gradle/wrapper/dists -name 'kotlin-compiler-embeddable-*.jar' | head -1)")")" >> "$GITHUB_ENV"
+          cmake -S engine-whisper/src/main/cpp -B build/native-host -DCMAKE_BUILD_TYPE=Release -DASTRA_CPU_VARIANTS=ON > /dev/null
+          cmake --build build/native-host --target astra_whisper -j4 > /dev/null
+          ls build/native-host build/native-host/bin
       - name: Benchmark (accuracy + speed on this runner's CPU)
+        env:
+          ASTRA_NATIVE_DIR: build/native-host
+          ASTRA_BACKEND_DIR: build/native-host/bin
+          LD_LIBRARY_PATH: ${{ github.workspace }}/build/native-host/bin
+          ASTRA_THREADS: "4"
         run: |
-          set -o pipefail
+          ./gradlew --no-daemon -q :tools:bench:installDist
           : > bench.txt
           for m in tiny.en base.en base; do
             echo "== ggml-$m.bin" | tee -a bench.txt
-            ASTRA_REFERENCE="$JFK_TEXT" ASTRA_THREADS=4 ./scripts/verify-native.sh /tmp/models/ggml-$m.bin /tmp/models/jfk.wav > bench-$m.log 2>&1 || { tail -60 bench-$m.log; exit 1; }
+            ASTRA_REFERENCE="$JFK_TEXT" ./gradlew --no-daemon -q :tools:bench:run --args="/tmp/models/ggml-$m.bin /tmp/models/jfk.wav" > bench-$m.log 2>&1 || { tail -60 bench-$m.log; exit 1; }
             grep -E "^(backend|engine|BENCH)" bench-$m.log | sed "s/^/[$m] /" | tee -a bench.txt
           done
           grep BENCH bench.txt | while IFS= read -r l; do echo "::notice title=Benchmark::$l"; done
