@@ -429,4 +429,15 @@
     <string name="about_principles_body">स्थानीय पहले। डिफ़ॉल्ट रूप से ऑफ़लाइन। ऐप के हर इंटरनेट अनुरोध के लिए आपकी नई, विशिष्ट स्वीकृति आवश्यक है। कोई खाता, विज्ञापन, एनालिटिक्स, ट्रैकर या क्लाउड बैकअप नहीं। इंजन का मूल आउटपुट कभी चुपचाप नहीं बदला जाता, और कुछ भी वास्तविकता से अधिक निश्चित नहीं दिखाया जाता।</string>
     <string name="about_licenses">ओपन-सोर्स लाइसेंस</string>
     <string name="about_licenses_body">whisper.cpp और ggml — MIT लाइसेंस, © The ggml authors। OpenAI Whisper मॉडल वेट — MIT लाइसेंस, © OpenAI। AndroidX, Jetpack Compose और Kotlin — Apache License 2.0। पूर्ण पाठ: सोर्स कोड में THIRD_PARTY_NOTICES.md।</string>
+    <string name="transcribe_skip_silence">मौन छोड़ें (तेज़)</string>
+    <string name="transcribe_skip_silence_note">लंबे विराम मॉडल को नहीं भेजे जाते; समय-चिह्न फिर भी रिकॉर्डिंग से मेल खाते हैं। मौन में गढ़ा गया टेक्स्ट भी रुकता है।</string>
+    <string name="warn_speed">%1$s का ऑडियो इसी फ़ोन पर %2$s में ट्रांसक्राइब हुआ (वास्तविक समय से %3$s× तेज़)।</string>
+    <string name="warn_live">रिकॉर्डिंग के साथ-साथ, इसी फ़ोन पर, लाइव ट्रांसक्राइब हुआ।</string>
+    <string name="live_toggle">रिकॉर्डिंग के साथ लाइव ट्रांसक्रिप्ट</string>
+    <string name="live_toggle_note">बोलते ही टेक्स्ट दिखता है और \'रोकें\' दबाने के कुछ ही पल बाद पूरा ट्रांसक्रिप्ट तैयार होता है। इसी फ़ोन पर चलता है; अधिक बैटरी लेता है।</string>
+    <string name="live_title">लाइव ट्रांसक्रिप्ट</string>
+    <string name="live_status">इसी फ़ोन पर · %1$s तक ट्रांसक्राइब</string>
+    <string name="live_catching_up">पीछे छूटा हिस्सा पूरा हो रहा है (%1$s पीछे)…</string>
+    <string name="live_finishing">आख़िरी कुछ सेकंड पूरे हो रहे हैं…</string>
+    <string name="live_waiting">टेक्स्ट यहाँ हर 20–30 सेकंड में दिखेगा।</string>
 </resources>

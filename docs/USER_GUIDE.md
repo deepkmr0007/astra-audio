@@ -17,10 +17,16 @@ If Strict Offline Mode is on, ASTRA first asks whether to turn it off.
 * *Library › Import audio* copies any audio file the phone can decode (MP3, M4A/AAC, WAV, OGG/Opus, FLAC, AMR…).
   The original file is never changed.
 
+### Live transcript (v1.1)
+With a model installed, *Live transcript while recording* is on by default: text appears every 20–30
+seconds while you speak, and the complete transcript is ready a moment after **Stop & save**. Untitled
+recordings are named from their first meaningful sentence. Turn it off on the Record screen to save battery.
+
 ## 3. Transcribe
 Open the item → choose language (or *Detect automatically*), **Fast / Balanced / Highest accuracy**,
-**Standard / Verbatim**, optional glossary, speaker-change marks (tinydiarize model), cleaned audio → **Transcribe on
+**Standard / Verbatim**, **Skip silences (faster)**, optional glossary, speaker-change marks (tinydiarize model), cleaned audio → **Transcribe on
 this phone**. Progress shows part *x of y*; you can leave the screen. If the app is killed, Home offers **Resume**.
+When it finishes, a note shows how fast it ran (e.g. "12:30 of audio in 1:45 — 7.1× real time").
 
 ## 4. Review and correct
 * Lines with low engine confidence are highlighted; tap **Play** to hear that part.

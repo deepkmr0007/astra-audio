@@ -52,3 +52,21 @@ so the "compare and choose" step had a single outcome: implement that spec.
 | 16 | Automated tests for gateway, permissions(manifest), storage, parsers, cancellation | Present and passing (JVM); instrumented written |
 | 17 | Clean-checkout build → signed-release-ready APK/AAB | Build config + CI provided; **not executed here** |
 | 18 | Security review: no bypass of consent gateway | Automated scan in the test suite (passes) + THREAT_MODEL.md |
+
+---
+
+# v1.1 — what was verified on real infrastructure (GitHub Actions)
+
+| Check | Where | Result |
+|---|---|---|
+| Real Gradle/AGP build of the whole project (debug + R8-optimized release APK) | CI `build` | ✅ — release APK 23 MB (v1.0 debug APK was 58 MB) |
+| Unit tests through Gradle (core + app) | CI `build` | ✅ |
+| Runtime CPU variants packaged for arm64 | CI `build` (APK inspection) | ✅ `libggml-cpu-android_armv8.0_1 … armv9.2_2` (7 variants) |
+| No networking symbols in any native library | CI `build` (llvm-nm on every `.so`) | ✅ |
+| Real Whisper models (tiny.en, base.en, base) — SHA-1 verified download, transcription through the app's own engine code | CI `bench` | ✅ WER 0 % on the JFK clip, see BENCHMARK_REPORT.md |
+| Silence skipping: speed-up and timestamp mapping on real model output | CI `bench` | ✅ ~1.9–2.0× faster on 51 s clip with 40 s silence; first word mapped to 19.71 s (true ≈ 20 s) |
+| App installs and launches on Android 14 (emulator), no network at startup, encrypted storage round-trip, byte-exact import | CI `emulator` | ✅ (4 instrumented tests) |
+| Consent dialog UI test, real on-device speech recognition test | CI `emulator` | fixed in this release cycle — see the latest run |
+
+Still not verified: speed on a physical ARM phone (CI emulators are x86-64, so the ARM CPU-variant
+selection is checked only by packaging, not executed), and accuracy on Hindi / noisy real-world audio.

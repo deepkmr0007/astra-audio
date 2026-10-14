@@ -174,4 +174,21 @@ object ResourceAdvisor {
     }
 
     fun threads(d: Device): Int = (d.cpuCores - 2).coerceIn(2, 8)
+
+    /**
+     * Phones mix fast "performance" cores with slow "efficiency" cores. Whisper's matrix kernels are
+     * split evenly across threads, so one thread on a slow core holds back all the others: using only
+     * the fast cores is usually quicker than using every core. Given each core's maximum frequency
+     * (kHz, from /sys/devices/system/cpu/cpuN/cpufreq/cpuinfo_max_freq), returns the number of cores
+     * within 15 % of the fastest, clamped to 2..8. Falls back to [fallback] when frequencies are unknown.
+     */
+    fun performanceThreads(maxFreqsKhz: List<Long>, fallback: Int): Int {
+        val known = maxFreqsKhz.filter { it > 0 }
+        if (known.size < 2) return fallback.coerceIn(2, 8)
+        val top = known.max()
+        val fast = known.count { it >= top * 0.85 }
+        // A single prime core (e.g. 1 + 3 + 4 layouts) is not enough on its own: add the next tier.
+        val n = if (fast < 2) known.count { it >= top * 0.55 } else fast
+        return n.coerceIn(2, 8)
+    }
 }

@@ -11,6 +11,7 @@ import app.astra.engine.whisper.WhisperEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -21,6 +22,7 @@ class EngineManager(
     private val installer: ModelInstaller,
     private val settings: SettingsStore,
     private val device: DeviceInfo,
+    private val nativeLibDir: String,
 ) {
     sealed class Load {
         data class Ready(val engine: WhisperEngine, val model: InstalledModel, val spec: ModelSpec) : Load()
@@ -56,7 +58,7 @@ class EngineManager(
         val advice = ResourceAdvisor.canRun(spec, device.snapshot())
         if (!advice.fits) return@withLock Load.Unavailable(advice.warning ?: "Not enough memory for this model.")
         val engine = withContext(Dispatchers.IO) {
-            WhisperEngine.load(installer.fileOf(model), spec.id, spec.speakerTurns, spec.translateToEnglish)
+            WhisperEngine.load(installer.fileOf(model), spec.id, spec.speakerTurns, spec.translateToEnglish, nativeLibDir)
         } ?: return@withLock Load.Unavailable("The model could not be loaded (file damaged or not enough memory). Try Verify in Models, or a smaller model.")
         current = Triple(engine, model, spec)
         Load.Ready(engine, model, spec)
@@ -70,4 +72,15 @@ class EngineManager(
     }
 
     fun isLoaded(): Boolean = current != null
+
+    /**
+     * Loads the model in the background ahead of time (e.g. when a recording screen opens), so pressing
+     * Transcribe starts computing immediately instead of first spending seconds reading the model.
+     */
+    fun prewarm(scope: kotlinx.coroutines.CoroutineScope) {
+        if (current != null || activeModel() == null) return
+        scope.launch(Dispatchers.IO) { runCatching { use { } } }
+    }
+
+    fun backendInfo(): String = WhisperEngine.backendInfo(nativeLibDir)
 }

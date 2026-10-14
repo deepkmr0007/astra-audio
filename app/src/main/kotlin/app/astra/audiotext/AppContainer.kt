@@ -7,6 +7,7 @@ import app.astra.audiotext.audio.Recorder
 import app.astra.audiotext.benchmark.BenchmarkRunner
 import app.astra.audiotext.device.DeviceInfo
 import app.astra.audiotext.engine.EngineManager
+import app.astra.audiotext.engine.LiveTranscriber
 import app.astra.audiotext.engine.OnDeviceDictation
 import app.astra.audiotext.engine.TranscriptionManager
 import app.astra.audiotext.export.ExportManager
@@ -62,10 +63,11 @@ class AppContainer(context: Context) {
     val device = DeviceInfo(appContext)
     val installer = ModelInstaller(File(appContext.filesDir, "models"))
     val downloader = ModelDownloader(gateway, installer, audit)
-    val engines = EngineManager(installer, settings, device)
+    val engines = EngineManager(installer, settings, device, appContext.applicationInfo.nativeLibraryDir)
     val decoder = AudioDecoder(library)
     val transcriptions = TranscriptionManager(library, engines, decoder, settings, device, scope)
     val recorder = Recorder(library, scope)
+    val live = LiveTranscriber(engines, library, settings, device, scope).also { lt -> recorder.pcmListener = { buf, n -> lt.onPcm(buf, n) } }
     val player = Player(library)
     val dictation = OnDeviceDictation(appContext)
     val tts = TtsController(appContext)

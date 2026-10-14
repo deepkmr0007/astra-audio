@@ -67,15 +67,18 @@ data class TranscribeOptions(
     val initialPrompt: String? = null,
     val tokenTimestamps: Boolean = true,
     val speakerTurns: Boolean = false,
+    /** Remove long silences before the model sees the audio (faster, fewer hallucinations). */
+    val skipSilence: Boolean = true,
 ) {
+    /** Describes everything that affects the OUTPUT (thread count does not, so it is not included). */
     fun summary(): String = buildString {
         append("language=").append(language)
         if (translateToEnglish) append(", translate→en")
         append(", profile=").append(profile.name)
         append(", style=").append(style.name)
-        append(", threads=").append(threads)
         if (initialPrompt != null) append(", glossary prompt")
         if (speakerTurns) append(", speaker turns")
+        if (skipSilence) append(", skip silence")
     }
 }
 

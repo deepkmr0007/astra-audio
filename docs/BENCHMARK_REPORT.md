@@ -1,10 +1,33 @@
 # Accuracy benchmark report
 
-**Status: no accuracy numbers have been measured yet, and none are claimed.**
+## Measured so far (v1.1, CI)
 
-Real WER/CER figures require (a) a real model and (b) a lawfully usable, representative test set — neither was
-available in the authoring environment (model hosts were unreachable there). Published numbers from other
-sources are not repeated here because they were measured on other hardware, settings and data.
+Every CI run downloads real Whisper models from the official source, verifies their SHA-1, and runs the
+app's own `WhisperEngine` + JNI bridge (`tools/bench`) on the public-domain JFK inaugural clip (11 s,
+English). Results from CI run #4 (GitHub `ubuntu-latest` runner, x86-64, **4 threads — not a phone**):
+
+| Model | Profile | Time for 11 s audio | Real-time factor | WER | CER |
+|---|---|---|---|---|---|
+| tiny.en | Fast | 0.51 s | 0.047 | 0.0 % | 0.0 % |
+| tiny.en | Balanced | 0.50 s | 0.045 | 0.0 % | 0.0 % |
+| tiny.en | Highest | 0.69 s | 0.063 | 0.0 % | 0.0 % |
+| base.en | Fast | 1.04 s | 0.094 | 0.0 % | 0.0 % |
+| base.en | Balanced | 1.01 s | 0.091 | 0.0 % | 0.0 % |
+| base.en | Highest | 1.33 s | 0.121 | 0.0 % | 0.0 % |
+| base (multilingual, auto language) | Fast | 1.83 s | 0.167 | 0.0 % | 0.0 % |
+| base (multilingual, auto language) | Balanced | 1.78 s | 0.162 | 0.0 % | 0.0 % |
+
+**Silence skipping** (same clip with 20 s of silence before and after, 51 s total, Fast profile):
+
+| Model | Without skipping | With skipping | Speed-up | First word mapped to |
+|---|---|---|---|---|
+| tiny.en | 0.997 s | 0.509 s | 1.96× | 19.71 s (true onset ≈ 20 s) |
+| base.en | 1.990 s | 1.049 s | 1.90× | 19.71 s |
+
+Read these honestly: one short, clean, well-known English clip is a smoke test, not a benchmark of
+real-world accuracy (WER 0 % here says nothing about noisy Hindi meetings), and x86 desktop speed is not
+phone speed. Each new CI run republishes the numbers in its GitHub Release notes; the on-device emulator
+test logs its own timings. The protocol below is still needed for representative Hindi/Hinglish results.
 
 ## What exists
 * `core/text/ErrorRate.kt`: WER and CER with visible alignment (S/D/I), corpus aggregation (total errors ÷ total

@@ -203,3 +203,12 @@ class DocumentImportTest {
         assertEquals("meeting_ notes", SafeFileName.sanitize("meeting: notes"))
     }
 }
+
+class AutoTitleTest {
+    @Test fun usesFirstContentfulSentence() {
+        assertEquals("Budget review for the Behror plantation project", AutoTitle.suggest("Hello. Um, okay. Budget review for the Behror plantation project. Then lunch."))
+        assertEquals("We need to send the revised project budget to…", AutoTitle.suggest("We need to send the revised project budget to finance by Friday."))
+        assertEquals("कल सुबह बैठक में सड़क की बात होगी", AutoTitle.suggest("नमस्ते। कल सुबह बैठक में सड़क की बात होगी।"))
+        assertEquals(null, AutoTitle.suggest("Hi. Okay. Yes."))
+    }
+}

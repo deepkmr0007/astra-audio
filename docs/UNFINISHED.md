@@ -20,11 +20,11 @@ Nothing below is presented anywhere in the app as working.
 8. Full speaker diarization: only tinydiarize speaker-*change* marks (English, small.en-tdrz), with alternating neutral labels the user corrects.
 9. Optional online adapters (e.g. cloud transcription). The gateway supports text/audio payload consent with
    preview and hash binding, but no remote provider is integrated — by design for v1.0.
-10. Live, progressive whisper transcription *while* recording (record-then-transcribe is implemented; live dictation uses Android's on-device recognizer on Android 12+).
+10. ~~Live whisper transcription while recording~~ — **done in v1.1** (20–28 s windows, transcript ready moments after Stop).
 11. Word-level karaoke highlighting (word timestamps are stored; the UI highlights the current segment).
 
 ## Engineering follow-ups
-12. Runtime-dispatched ARMv8.2 (dotprod/fp16) native library for ~1.5–2× speed on newer phones; GPU backends.
+12. ~~Runtime-dispatched ARMv8.2+ CPU kernels~~ — **done in v1.1** (ggml CPU variants chosen at start-up). GPU (Vulkan/OpenCL) backends remain future work.
 13. Resumable model downloads (an interrupted download restarts and asks for consent again).
 14. Gradle wrapper `distributionSha256Sum` and Gradle dependency-verification metadata.
 15. Full transitive SBOM (CycloneDX plugin) and an online CVE check.

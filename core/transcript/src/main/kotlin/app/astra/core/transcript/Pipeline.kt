@@ -104,7 +104,7 @@ class TranscriptionPipeline(
                 return PipelineResult.Failed(chunk.index, "Could not read audio: ${e.message ?: e.javaClass.simpleName}")
             }
             val completedBefore = cp.completed.size
-            val result = engine.transcribe(pcm, chunk.startMs, chunkOptions, object : TranscribeListener {
+            val result = SilenceAware.transcribe(engine, pcm, chunk.startMs, chunkOptions, object : TranscribeListener {
                 override fun onProgress(percent: Int) {
                     val overall = ((completedBefore + percent / 100.0) / chunks.size * 100).toInt().coerceIn(0, 100)
                     listener.onProgress(chunk.index, chunks.size, overall)
@@ -133,5 +133,56 @@ class TranscriptionPipeline(
         val detected = cp.lockedLanguage ?: cp.completed.firstNotNullOfOrNull { it.detectedLanguage }
         store.delete(jobId)
         return PipelineResult.Done(all, detected)
+    }
+}
+
+/**
+ * Runs an engine on audio with long silences removed (when [TranscribeOptions.skipSilence] is on)
+ * and maps every segment and token timestamp back onto the original recording.
+ */
+object SilenceAware {
+
+    data class Stats(val originalMs: Long, val processedMs: Long)
+
+    @Volatile var lastStats: Stats? = null
+        private set
+
+    suspend fun transcribe(
+        engine: TranscriptionEngine,
+        pcm: FloatArray,
+        offsetMs: Long,
+        options: TranscribeOptions,
+        listener: TranscribeListener,
+        cancel: CancelSignal,
+        rate: Int = app.astra.core.audio.Dsp.WHISPER_RATE,
+    ): EngineResult {
+        val compact = if (options.skipSilence) app.astra.core.audio.SilenceSkipper.compact(pcm, rate)
+            else app.astra.core.audio.SilenceSkipper.identity(pcm, rate)
+        lastStats = Stats(pcm.size * 1000L / rate, compact.samples.size * 1000L / rate)
+        if (compact.allSilent) {
+            listener.onProgress(100)
+            return EngineResult.Success(emptyList(), null)
+        }
+        if (compact.isIdentity) return engine.transcribe(pcm, offsetMs, options, listener, cancel)
+        val mapped = object : TranscribeListener {
+            override fun onProgress(percent: Int) = listener.onProgress(percent)
+            override fun onSegments(segments: List<Segment>) = listener.onSegments(segments.map { remap(it, compact, offsetMs) })
+        }
+        return when (val r = engine.transcribe(compact.samples, 0, options, mapped, cancel)) {
+            is EngineResult.Success -> EngineResult.Success(r.segments.map { remap(it, compact, offsetMs) }, r.detectedLanguage)
+            else -> r
+        }
+    }
+
+    fun remap(s: Segment, c: app.astra.core.audio.SilenceSkipper.Result, offsetMs: Long): Segment {
+        val start = offsetMs + c.startToOriginalMs(s.startMs)
+        val end = maxOf(start, offsetMs + c.endToOriginalMs(s.endMs))
+        return s.copy(
+            startMs = start,
+            endMs = end,
+            tokens = s.tokens.map { t ->
+                t.copy(startMs = t.startMs?.let { offsetMs + c.startToOriginalMs(it) }, endMs = t.endMs?.let { offsetMs + c.endToOriginalMs(it) })
+            },
+        )
     }
 }

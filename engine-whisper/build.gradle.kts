@@ -13,13 +13,13 @@ android {
         minSdk = 26
         consumerProguardFiles("consumer-rules.pro")
         ndk {
-            // arm64-v8a: almost all current phones. armeabi-v7a: older/low-end (Android Go) phones.
+            // arm64-v8a: almost all current phones (gets runtime-selected optimized CPU kernels). armeabi-v7a: older/low-end (Android Go) phones.
             // x86_64: emulator only.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
         externalNativeBuild {
             cmake {
-                arguments += listOf("-DANDROID_STL=c++_static", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")
+                arguments += listOf("-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")
                 cppFlags += listOf("-std=c++17")
             }
         }

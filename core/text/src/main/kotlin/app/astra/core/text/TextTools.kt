@@ -228,3 +228,25 @@ object TextAnalysis {
         )
     }
 }
+
+// ------------------------------------------------------------------ auto title
+
+/**
+ * Names an untitled recording from its own words: the first sentence that carries content (not a
+ * greeting or filler), shortened at a word boundary. Purely extractive — it never invents a title.
+ */
+object AutoTitle {
+    private val GREETING = Regex("(?i)^(hi|hello|hey|ok|okay|so|um+|uh+|good (morning|afternoon|evening)|namaste|नमस्ते|हेलो|अच्छा|तो)\\b[ ,.!]*")
+
+    fun suggest(text: String, maxChars: Int = 48): String? {
+        for (s in TextBasics.sentences(text)) {
+            val cleaned = CleanTranscript.clean(s.text).first.replace(GREETING, "").trim().trimEnd('.', '।', '!', '?', ',')
+            val words = TextBasics.wordList(cleaned)
+            if (words.size < 3 || words.count { !TextBasics.isStopword(it) } < 2) continue
+            if (cleaned.length <= maxChars) return cleaned.replaceFirstChar { it.uppercaseChar() }
+            val cut = cleaned.substring(0, maxChars).substringBeforeLast(' ').trimEnd(',', ';', ':')
+            return cut.replaceFirstChar { it.uppercaseChar() } + "…"
+        }
+        return null
+    }
+}

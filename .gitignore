@@ -12,3 +12,4 @@ keystore.properties
 captures/
 *.apk
 *.aab
+__pycache__/

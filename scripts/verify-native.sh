@@ -12,10 +12,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODEL="${1:?model path}"; WAV="${2:?wav path}"; CANCEL="${3:-}"
 NB="$ROOT/build/native-host"; OUT="$ROOT/build/native-smoke"
 mkdir -p "$NB" "$OUT"
-cmake -S "$ROOT/engine-whisper/src/main/cpp" -B "$NB" -DCMAKE_BUILD_TYPE=Release >/dev/null
+cmake -S "$ROOT/engine-whisper/src/main/cpp" -B "$NB" -DCMAKE_BUILD_TYPE=Release ${ASTRA_CPU_VARIANTS:+-DASTRA_CPU_VARIANTS=ON} >/dev/null
 cmake --build "$NB" --target astra_whisper -j"$(nproc 2>/dev/null || echo 4)" >/dev/null
 echo "== native symbols that could reach the network (expect none):"
-nm -D --undefined-only "$NB"/libastra_whisper.* | grep -Ei ' (socket|connect|getaddrinfo|gethostbyname|curl_)' || echo "   none"
+for so in $(find "$NB" -name '*.so'); do nm -D --undefined-only "$so" | grep -Ei ' (socket|connect|getaddrinfo|gethostbyname|curl_)' && echo "   ^ in $so"; done; echo "   (scan done)"
 
 [ -d "$ROOT/build/verify-core/classes" ] || "$ROOT/scripts/verify-core.sh"
 LIB=""
@@ -26,4 +26,6 @@ KCP="$(j 'kotlin-compiler-embeddable-*.jar'):$STD:$(j 'kotlin-script-runtime-*.j
 java -cp "$KCP" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-reflect -no-stdlib -jvm-target 17 \
   -classpath "$STD:$CO:$ROOT/build/verify-core/classes" -d "$OUT" \
   "$ROOT"/engine-whisper/src/main/kotlin/app/astra/engine/whisper/*.kt "$ROOT/scripts/native-smoke/NativeSmoke.kt" 2>&1 | grep -v '^Picked up' || true
-java -Djava.library.path="$NB" -cp "$OUT:$ROOT/build/verify-core/classes:$STD:$CO" NativeSmokeKt "$MODEL" "$WAV" $CANCEL
+LIBDIRS="$NB:$(dirname "$(find "$NB" -name "libwhisper.so" | head -1)" 2>/dev/null):$(dirname "$(find "$NB" -name "libggml.so" | head -1)" 2>/dev/null)"
+BACKEND_DIR="$(dirname "$(find "$NB" -name "libggml-cpu*.so" | head -1)" 2>/dev/null || true)"
+LD_LIBRARY_PATH="$LIBDIRS" java -Dastra.libdir="$BACKEND_DIR" -Djava.library.path="$NB" -cp "$OUT:$ROOT/build/verify-core/classes:$STD:$CO" NativeSmokeKt "$MODEL" "$WAV" $CANCEL

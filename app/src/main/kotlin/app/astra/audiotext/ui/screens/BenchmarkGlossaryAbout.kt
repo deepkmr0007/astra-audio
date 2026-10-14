@@ -114,7 +114,7 @@ fun BenchmarkScreen(container: AppContainer, onBack: () -> Unit) {
                     running = true; report = null
                     val s = CancelSignal(); signal = s
                     scope.launch {
-                        val threads = container.settings.value.threads.takeIf { it > 0 } ?: ResourceAdvisor.threads(container.device.snapshot())
+                        val threads = container.settings.value.threads.takeIf { it > 0 } ?: container.device.recommendedThreads()
                         report = container.benchmark.run(cases, profile, threads, s)
                         running = false
                     }
@@ -181,7 +181,7 @@ fun GlossaryScreen(container: AppContainer, onBack: () -> Unit) {
 @Composable
 fun AboutScreen(container: AppContainer, onBack: () -> Unit) {
     var engineInfo by remember { mutableStateOf("…") }
-    androidx.compose.runtime.LaunchedEffect(Unit) { engineInfo = withContext(Dispatchers.Default) { WhisperEngine.systemInfo() } }
+    androidx.compose.runtime.LaunchedEffect(Unit) { engineInfo = withContext(Dispatchers.Default) { container.engines.backendInfo() } }
     AstraScaffold(container, stringResource(R.string.about_title), onBack) { padding ->
         Column(Modifier.fillMaxSize().screenPadding(padding).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             SectionCard {

@@ -452,4 +452,16 @@ S = [
 ("about_principles_body", "Local first. Offline by default. Every app-initiated internet request needs your fresh, specific approval. No accounts, ads, analytics, trackers or cloud backup. Raw engine output is never silently changed, and nothing is presented as more certain than it is.", "स्थानीय पहले। डिफ़ॉल्ट रूप से ऑफ़लाइन। ऐप के हर इंटरनेट अनुरोध के लिए आपकी नई, विशिष्ट स्वीकृति आवश्यक है। कोई खाता, विज्ञापन, एनालिटिक्स, ट्रैकर या क्लाउड बैकअप नहीं। इंजन का मूल आउटपुट कभी चुपचाप नहीं बदला जाता, और कुछ भी वास्तविकता से अधिक निश्चित नहीं दिखाया जाता।"),
 ("about_licenses", "Open-source licences", "ओपन-सोर्स लाइसेंस"),
 ("about_licenses_body", "whisper.cpp and ggml — MIT License, © The ggml authors. OpenAI Whisper model weights — MIT License, © OpenAI. AndroidX, Jetpack Compose and Kotlin — Apache License 2.0. Full texts: THIRD_PARTY_NOTICES.md in the source code.", "whisper.cpp और ggml — MIT लाइसेंस, © The ggml authors। OpenAI Whisper मॉडल वेट — MIT लाइसेंस, © OpenAI। AndroidX, Jetpack Compose और Kotlin — Apache License 2.0। पूर्ण पाठ: सोर्स कोड में THIRD_PARTY_NOTICES.md।"),
+# v1.1 speed & live
+("transcribe_skip_silence", "Skip silences (faster)", "मौन छोड़ें (तेज़)"),
+("transcribe_skip_silence_note", "Long pauses are not sent to the model; timestamps still match the recording. Also prevents made-up text in silences.", "लंबे विराम मॉडल को नहीं भेजे जाते; समय-चिह्न फिर भी रिकॉर्डिंग से मेल खाते हैं। मौन में गढ़ा गया टेक्स्ट भी रुकता है।"),
+("warn_speed", "Transcribed %1$s of audio in %2$s on this phone (%3$s× real time).", "%1$s का ऑडियो इसी फ़ोन पर %2$s में ट्रांसक्राइब हुआ (वास्तविक समय से %3$s× तेज़)।"),
+("warn_live", "Transcribed live while recording, on this phone.", "रिकॉर्डिंग के साथ-साथ, इसी फ़ोन पर, लाइव ट्रांसक्राइब हुआ।"),
+("live_toggle", "Live transcript while recording", "रिकॉर्डिंग के साथ लाइव ट्रांसक्रिप्ट"),
+("live_toggle_note", "Text appears as you speak and the full transcript is ready moments after you tap Stop. Runs on this phone; uses more battery.", "बोलते ही टेक्स्ट दिखता है और 'रोकें' दबाने के कुछ ही पल बाद पूरा ट्रांसक्रिप्ट तैयार होता है। इसी फ़ोन पर चलता है; अधिक बैटरी लेता है।"),
+("live_title", "Live transcript", "लाइव ट्रांसक्रिप्ट"),
+("live_status", "On this phone · transcribed up to %1$s", "इसी फ़ोन पर · %1$s तक ट्रांसक्राइब"),
+("live_catching_up", "Catching up (%1$s behind)…", "पीछे छूटा हिस्सा पूरा हो रहा है (%1$s पीछे)…"),
+("live_finishing", "Finishing the last few seconds…", "आख़िरी कुछ सेकंड पूरे हो रहे हैं…"),
+("live_waiting", "Text will appear here every 20–30 seconds.", "टेक्स्ट यहाँ हर 20–30 सेकंड में दिखेगा।"),
 ]

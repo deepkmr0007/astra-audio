@@ -34,6 +34,7 @@ data class AppSettings(
     val textScale: Float = 1.0f,
     val retentionDays: Int = 0, // 0 = keep forever (never auto-delete)
     val onboarded: Boolean = false,
+    val liveTranscribe: Boolean = true,
 )
 
 class SettingsStore(context: Context) {
@@ -63,6 +64,7 @@ class SettingsStore(context: Context) {
             textScale = prefs.getFloat("textScale", d.textScale),
             retentionDays = prefs.getInt("retentionDays", d.retentionDays),
             onboarded = prefs.getBoolean("onboarded", d.onboarded),
+            liveTranscribe = prefs.getBoolean("liveTranscribe", d.liveTranscribe),
         )
     }
 
@@ -90,6 +92,7 @@ class SettingsStore(context: Context) {
             .putFloat("textScale", s.textScale)
             .putInt("retentionDays", s.retentionDays)
             .putBoolean("onboarded", s.onboarded)
+            .putBoolean("liveTranscribe", s.liveTranscribe)
             .apply()
         _state.value = s
     }

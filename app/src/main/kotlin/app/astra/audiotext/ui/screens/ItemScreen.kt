@@ -146,6 +146,9 @@ private fun TranscriptList(
     var cleanBusy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    if (item.hasAudio && transcript == null) {
+        LaunchedEffect(item.id) { container.engines.prewarm(container.scope) }
+    }
     if (item.hasAudio) {
         DisposableEffect(item.id) {
             player.open(item.id)
@@ -197,7 +200,7 @@ private fun TranscriptList(
         if (transcript != null && job?.running != true) {
             item {
                 SectionCard {
-                    transcript.warnings.forEach { Banner(warningText(it)) }
+                    transcript.warnings.forEach { w -> Banner(warningText(w), warning = !(w.startsWith("speed:") || w.startsWith("live:"))) }
                     transcript.engine?.let { e ->
                         Text(stringResource(R.string.item_engine_line, e.modelId, e.profile, if (e.ranOffline) stringResource(R.string.item_on_device) else "?"),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -441,6 +444,7 @@ fun TranscribeOptionsCard(container: AppContainer, item: LibraryItem, translate:
     var turns by remember { mutableStateOf(false) }
     var glossary by remember { mutableStateOf(settings.glossary.isNotBlank()) }
     var clean by remember { mutableStateOf(false) }
+    var skipSilence by remember { mutableStateOf(true) }
     var langMenu by remember { mutableStateOf(false) }
     val warning = remember { container.device.heavyWorkWarning() }
 
@@ -489,12 +493,13 @@ fun TranscribeOptionsCard(container: AppContainer, item: LibraryItem, translate:
         ToggleRow(stringResource(R.string.transcribe_speaker_turns), if (spec.speakerTurns) stringResource(R.string.transcribe_speaker_turns_note) else stringResource(R.string.transcribe_speaker_turns_unsupported),
             turns && spec.speakerTurns, enabled = spec.speakerTurns) { turns = it }
         ToggleRow(stringResource(R.string.transcribe_use_glossary), stringResource(R.string.transcribe_use_glossary_note), glossary, enabled = settings.glossary.isNotBlank()) { glossary = it }
+        ToggleRow(stringResource(R.string.transcribe_skip_silence), stringResource(R.string.transcribe_skip_silence_note), skipSilence) { skipSilence = it }
         if (item.hasCleanAudio) ToggleRow(stringResource(R.string.transcribe_use_clean), stringResource(R.string.transcribe_use_clean_note), clean) { clean = it }
         warning?.let { Banner(it) }
         Button(
             enabled = !translate || spec.translateToEnglish,
             onClick = {
-                container.transcriptions.start(JobRequest(item.id, language, translate, profile, style, turns && spec.speakerTurns, glossary, clean))
+                container.transcriptions.start(JobRequest(item.id, language, translate, profile, style, turns && spec.speakerTurns, glossary, clean, skipSilence))
             },
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (translate) stringResource(R.string.translate_start) else stringResource(R.string.transcribe_start)) }
@@ -549,6 +554,14 @@ fun warningText(key: String): String = when {
     key == "translation:machine" -> stringResource(R.string.warn_machine_translation)
     key == "speakers:turns-only" -> stringResource(R.string.warn_speaker_turns)
     key == "empty:no-speech" -> stringResource(R.string.item_no_speech)
+    key.startsWith("speed:") -> {
+        val parts = key.split(':')
+        val audio = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+        val took = parts.getOrNull(2)?.toLongOrNull()?.coerceAtLeast(1) ?: 1L
+        stringResource(R.string.warn_speed, app.astra.core.common.formatDuration(audio), app.astra.core.common.formatDuration(took),
+            String.format(java.util.Locale.ROOT, "%.1f", audio.toDouble() / took))
+    }
+    key.startsWith("live:") -> stringResource(R.string.warn_live)
     else -> key
 }
 
