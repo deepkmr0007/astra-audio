@@ -17,6 +17,9 @@ object WhisperNative {
         }
     }
 
+    /** Loads the best CPU kernel variant for this phone from [nativeLibDir]; returns device count. */
+    @JvmStatic external fun nativeLoadBackends(nativeLibDir: String): Int
+    @JvmStatic external fun nativeBackendInfo(): String
     @JvmStatic external fun nativeVersion(): String
     @JvmStatic external fun nativeSystemInfo(): String
     @JvmStatic external fun nativeInit(modelPath: String): Long

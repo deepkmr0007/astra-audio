@@ -29,6 +29,19 @@ class DeviceInfo(private val context: Context) {
         )
     }
 
+    /**
+     * Thread count for speech recognition: the phone's performance cores only (see
+     * ResourceAdvisor.performanceThreads). Reads each core's max frequency from sysfs (world-readable,
+     * no permission, no identifiers).
+     */
+    fun recommendedThreads(): Int {
+        val cores = Runtime.getRuntime().availableProcessors()
+        val freqs = (0 until cores).map { i ->
+            runCatching { java.io.File("/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq").readText().trim().toLong() }.getOrDefault(0L)
+        }
+        return ResourceAdvisor.performanceThreads(freqs, ResourceAdvisor.threads(snapshot()))
+    }
+
     enum class Thermal { NORMAL, WARM, HOT, UNKNOWN }
 
     fun thermal(): Thermal {

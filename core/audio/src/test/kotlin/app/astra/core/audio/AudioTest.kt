@@ -110,3 +110,63 @@ class StreamingResamplerTest {
         assertEquals(16000, s.size)
     }
 }
+
+class SilenceSkipperTest {
+    private val rate = 16000
+    private fun speech(seconds: Double) = FloatArray((seconds * rate).toInt()) { (0.3 * kotlin.math.sin(it * 0.07) * (0.6 + 0.4 * kotlin.math.sin(it * 0.0009))).toFloat() }
+    private fun silence(seconds: Double, noise: Float = 0.0005f) = FloatArray((seconds * rate).toInt()) { (if (it % 2 == 0) noise else -noise) }
+
+    @Test fun removesLongPausesAndMapsTimesBack() {
+        // 2 s speech, 10 s silence, 3 s speech, 8 s silence
+        val pcm = speech(2.0) + silence(10.0) + speech(3.0) + silence(8.0)
+        val r = SilenceSkipper.compact(pcm, rate)
+        assertTrue("should remove most silence, removed=${r.removedFraction}", r.removedFraction > 0.6)
+        assertEquals(2, r.spans.size)
+        // Start of the second speech burst (original 12.0 s) must map back to ≈12.0 s.
+        val secondDst = r.spans[1].dstStart.toLong() * 1000 / rate
+        val back = r.startToOriginalMs(secondDst + 300) // +pad kept before the speech
+        assertTrue("mapped to $back", kotlin.math.abs(back - 12_000) < 60)
+        // End of first span maps to its original end, not into the next span.
+        val endFirst = r.endToOriginalMs(r.spans[0].dstEnd.toLong() * 1000 / rate)
+        assertTrue(endFirst < 3_000)
+        // Every kept sample is identical to the original (nothing re-synthesised).
+        for (s in r.spans) for (k in s.srcStart until s.srcEnd step 997) assertEquals(pcm[k], r.samples[s.dstStart + (k - s.srcStart)], 0f)
+    }
+
+    @Test fun shortPausesAreKept() {
+        val pcm = speech(3.0) + silence(0.8) + speech(3.0)
+        assertTrue(SilenceSkipper.compact(pcm, rate).isIdentity)
+    }
+
+    @Test fun allSilentIsDetected() {
+        assertTrue(SilenceSkipper.compact(silence(20.0, 0.0002f), rate).allSilent)
+    }
+
+    @Test fun quietSpeechIsNotMistakenForSilence() {
+        // Quiet speaker (~ -36 dBFS) with long pauses: speech must survive.
+        val quiet = speech(4.0).map { it * 0.05f }.toFloatArray()
+        val pcm = quiet + silence(6.0, 0.00005f) + quiet
+        val r = SilenceSkipper.compact(pcm, rate)
+        val kept = r.samples.size.toDouble() / rate
+        assertTrue("kept $kept s", kept >= 7.9)
+    }
+}
+
+class LiveWindowingTest {
+    @Test fun cutsWindowsAtQuietPointsAndKeepsEverySample() {
+        val rate = 16000
+        val w = LiveWindowing(rate)
+        val total = 75 * rate
+        val src = FloatArray(total) { i -> if ((i / rate) % 25 == 24) 0f else (0.3 * kotlin.math.sin(i * 0.05)).toFloat() }
+        val windows = ArrayList<LiveWindowing.Window>()
+        var i = 0
+        while (i < total) { val e = minOf(total, i + 1600); windows += w.push(src, i, e); i = e }
+        w.flush()?.let { windows += it }
+        assertEquals(total, windows.sumOf { it.samples.size })
+        var expectedStart = 0L
+        for (win in windows) { assertEquals(expectedStart, win.startSample); expectedStart += win.samples.size }
+        assertTrue(windows.dropLast(1).all { it.samples.size in 20 * rate..28 * rate })
+        // First cut lands in the quiet second (24..25 s).
+        assertEquals(24, windows[0].samples.size / rate)
+    }
+}

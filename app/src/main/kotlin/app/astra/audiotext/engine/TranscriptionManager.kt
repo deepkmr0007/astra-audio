@@ -44,16 +44,17 @@ data class JobRequest(
     val speakerTurns: Boolean,
     val useGlossary: Boolean,
     val useCleanAudio: Boolean,
+    val skipSilence: Boolean = true,
 ) {
     fun toJson(): String = Json.write(mapOf("item" to itemId, "lang" to language, "translate" to translateToEnglish, "profile" to profile.name,
-        "style" to style.name, "turns" to speakerTurns, "glossary" to useGlossary, "clean" to useCleanAudio))
+        "style" to style.name, "turns" to speakerTurns, "glossary" to useGlossary, "clean" to useCleanAudio, "skipSilence" to skipSilence))
 
     companion object {
         fun fromJson(s: String): JobRequest? = try {
             val m = Json.parseObject(s)
             JobRequest(m.str("item")!!, m.str("lang") ?: "auto", m.bool("translate") ?: false,
                 AccuracyProfile.valueOf(m.str("profile") ?: "BALANCED"), TranscriptStyle.valueOf(m.str("style") ?: "STANDARD"),
-                m.bool("turns") ?: false, m.bool("glossary") ?: true, m.bool("clean") ?: false)
+                m.bool("turns") ?: false, m.bool("glossary") ?: true, m.bool("clean") ?: false, m.bool("skipSilence") ?: true)
         } catch (e: Exception) { null }
     }
 }
@@ -77,6 +78,8 @@ data class JobState(
  * changes). Progress is checkpointed per chunk in an encrypted file, so after the app is killed the
  * job can be resumed from the last finished chunk. All processing is local.
  */
+private val DEFAULT_TITLES = setOf("Recording", "रिकॉर्डिंग", "Imported audio")
+
 class TranscriptionManager(
     private val library: LibraryRepository,
     private val engines: EngineManager,
@@ -168,11 +171,13 @@ class TranscriptionManager(
                 translateToEnglish = request.translateToEnglish,
                 profile = request.profile,
                 style = request.style,
-                threads = if (s.threads > 0) s.threads else ResourceAdvisor.threads(device.snapshot()),
+                threads = if (s.threads > 0) s.threads else device.recommendedThreads(),
                 initialPrompt = if (request.useGlossary && s.useGlossaryPrompt) glossary.initialPrompt() else null,
                 tokenTimestamps = true,
                 speakerTurns = request.speakerTurns && ready.spec.speakerTurns,
+                skipSilence = request.skipSilence,
             )
+            val startedAt = System.currentTimeMillis()
             set(JobState(id, JobState.Phase.TRANSCRIBING, 0, 0, chunks.size))
             val pipeline = TranscriptionPipeline(ready.engine, EncryptedCheckpointStore(library, id))
             val result = pipeline.run(
@@ -205,6 +210,8 @@ class TranscriptionManager(
                         if (request.translateToEnglish) add("translation:machine")
                         if (options.speakerTurns) add("speakers:turns-only")
                         if (result.segments.isEmpty()) add("empty:no-speech")
+                        // Speed report: audio length vs wall-clock time for this run (shown to the user).
+                        add("speed:${total * 1000L / Dsp.WHISPER_RATE}:${System.currentTimeMillis() - startedAt}")
                     }
                     val t = Transcript(
                         id = Ids.newId(),
@@ -222,7 +229,11 @@ class TranscriptionManager(
                         tags = item.tags,
                     )
                     if (request.translateToEnglish) library.writeEncrypted(translationFile(id), t.toJson().toByteArray())
-                    else library.saveTranscript(t)
+                    else {
+                        library.saveTranscript(t)
+                        // Untitled recordings get a name taken from their own first sentence.
+                        if (item.title in DEFAULT_TITLES) app.astra.core.text.AutoTitle.suggest(t.plainText())?.let { nt -> library.update(id) { it.copy(title = nt) } }
+                    }
                     requestFile(id).delete()
                     set(JobState(id, JobState.Phase.DONE, 100, chunks.size, chunks.size, result.segments))
                 }

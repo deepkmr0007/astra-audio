@@ -116,6 +116,11 @@ private fun RecordPanel(container: AppContainer, withMic: (() -> Unit) -> Unit) 
     val recording = state.phase == Recorder.Phase.RECORDING
     val paused = state.phase == Recorder.Phase.PAUSED
     val active = recording || paused
+    val settings by container.settings.state.collectAsState()
+    val live by container.live.state.collectAsState()
+    val liveAvailable = remember { container.live.available() }
+    // Load the speech model while the user gets ready, so the first words are transcribed at once.
+    LaunchedEffect(Unit) { if (settings.liveTranscribe) container.engines.prewarm(container.scope) }
 
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -137,6 +142,14 @@ private fun RecordPanel(container: AppContainer, withMic: (() -> Unit) -> Unit) 
 
     state.error?.let { Banner(it) }
 
+    if (!active && liveAvailable) {
+        ToggleRow(stringResource(R.string.live_toggle), stringResource(R.string.live_toggle_note), settings.liveTranscribe) { on ->
+            container.settings.update { it.copy(liveTranscribe = on) }
+        }
+    }
+    if (live.active || live.finishing) LiveTranscriptCard(live, state.elapsedMs)
+    live.error?.let { Banner(it) }
+
     if (active) {
         OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text(stringResource(R.string.record_name_label)) },
             singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -145,7 +158,12 @@ private fun RecordPanel(container: AppContainer, withMic: (() -> Unit) -> Unit) 
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         when {
             !active -> Button(
-                onClick = { withMic { container.recorder.clearError(); container.recorder.start() } },
+                onClick = {
+                    withMic {
+                        container.recorder.clearError()
+                        if (container.recorder.start() && settings.liveTranscribe && liveAvailable) container.live.start()
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = StateColors.recording),
                 modifier = Modifier.weight(1f).height(56.dp),
             ) { Text(stringResource(R.string.record_start)) }
@@ -153,11 +171,15 @@ private fun RecordPanel(container: AppContainer, withMic: (() -> Unit) -> Unit) 
                 OutlinedButton(onClick = { if (recording) container.recorder.pause() else container.recorder.resume() }, modifier = Modifier.weight(1f).height(56.dp)) {
                     Text(if (recording) stringResource(R.string.record_pause) else stringResource(R.string.record_resume))
                 }
-                Button(onClick = {
+                Button(enabled = !live.finishing, onClick = {
                     scope.launch {
+                        val autoTitle = title.isBlank()
                         val item = container.recorder.stop(title.ifBlank { defaultTitle })
                         title = ""
-                        if (item != null) container.navigator.replace(Screen.Item(item.id))
+                        if (item != null) {
+                            if (live.active) container.live.finish(item, autoTitle) else container.live.cancel()
+                            container.navigator.replace(Screen.Item(item.id))
+                        } else container.live.cancel()
                     }
                 }, modifier = Modifier.weight(1f).height(56.dp)) { Text(stringResource(R.string.record_stop_save)) }
             }
@@ -168,7 +190,26 @@ private fun RecordPanel(container: AppContainer, withMic: (() -> Unit) -> Unit) 
     }
     if (confirmDiscard) {
         ConfirmDialog(stringResource(R.string.record_discard_title), stringResource(R.string.record_discard_body), stringResource(R.string.action_delete),
-            onConfirm = { scope.launch { container.recorder.cancel() } }, onDismiss = { confirmDiscard = false }, destructive = true)
+            onConfirm = { scope.launch { container.live.cancel(); container.recorder.cancel() } }, onDismiss = { confirmDiscard = false }, destructive = true)
+    }
+}
+
+@Composable
+private fun LiveTranscriptCard(live: app.astra.audiotext.engine.LiveTranscriber.State, recordedMs: Long) {
+    SectionCard(stringResource(R.string.live_title)) {
+        val lag = (recordedMs - live.transcribedUntilMs).coerceAtLeast(0)
+        Text(
+            when {
+                live.finishing -> stringResource(R.string.live_finishing)
+                live.queuedWindows > 1 -> stringResource(R.string.live_catching_up, formatDuration(lag))
+                else -> stringResource(R.string.live_status, formatDuration(live.transcribedUntilMs))
+            },
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (live.finishing) LinearProgressIndicator(Modifier.fillMaxWidth())
+        val text = live.segments.takeLast(12).joinToString(" ") { it.text.trim() }
+        Text(text.ifBlank { stringResource(R.string.live_waiting) }, style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     }
 }
 

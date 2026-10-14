@@ -52,7 +52,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfigs.findByName("release")?.let { signingConfig = it }
+            // Owner's release key when keystore.properties exists; otherwise the public debug key, so CI
+            // can still publish an installable, fully optimized (R8) APK.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
         debug {
             applicationIdSuffix = ".debug"
@@ -73,7 +75,9 @@ android {
 
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
-        jniLibs { useLegacyPackaging = false }
+        // Extract native libraries on install: ggml picks its CPU kernel variant by scanning the
+        // native library directory, which is empty when libraries stay compressed inside the APK.
+        jniLibs { useLegacyPackaging = true }
     }
 
     // Reproducible builds: no dependency metadata blob (it is also only readable by Google Play).

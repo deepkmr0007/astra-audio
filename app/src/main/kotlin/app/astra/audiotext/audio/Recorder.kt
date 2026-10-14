@@ -56,6 +56,9 @@ class Recorder(private val library: LibraryRepository, private val scope: Corout
     private var samples = 0L
     private var quality = AudioQuality.Accumulator(RATE)
 
+    /** Receives every recorded block (16 kHz mono float) on the audio thread — used for live transcription. */
+    @Volatile var pcmListener: ((FloatArray, Int) -> Unit)? = null
+
     @SuppressLint("MissingPermission") // The UI requests RECORD_AUDIO right before calling start().
     fun start(): Boolean {
         if (_state.value.phase != Phase.IDLE) return false
@@ -99,6 +102,7 @@ class Recorder(private val library: LibraryRepository, private val scope: Corout
             }
             out?.write(bytes.array(), 0, n * 2)
             quality.add(floats, 0, n)
+            pcmListener?.invoke(floats, n)
             samples += n
             _state.value = _state.value.copy(elapsedMs = samples * 1000 / RATE, level = peak)
         }

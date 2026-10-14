@@ -188,14 +188,30 @@ class WhisperEngine private constructor(
     }
 
     companion object {
-        /** Loads a verified model file. Returns null if whisper.cpp cannot load it (corrupt / out of memory). */
-        fun load(model: File, modelId: String, speakerTurns: Boolean, translate: Boolean): WhisperEngine? {
+        @Volatile private var backendDevices = -1
+
+        /**
+         * Loads the native library and the fastest CPU kernels this phone supports (once per process).
+         * [nativeLibDir] is the app's native library directory (ApplicationInfo.nativeLibraryDir).
+         */
+        @Synchronized
+        fun prepare(nativeLibDir: String): Int {
             WhisperNative.ensureLoaded()
+            if (backendDevices < 0) backendDevices = WhisperNative.nativeLoadBackends(nativeLibDir)
+            return backendDevices
+        }
+
+        /** Loads a verified model file. Returns null if whisper.cpp cannot load it (corrupt / out of memory). */
+        fun load(model: File, modelId: String, speakerTurns: Boolean, translate: Boolean, nativeLibDir: String): WhisperEngine? {
+            if (prepare(nativeLibDir) <= 0) return null
             val h = WhisperNative.nativeInit(model.absolutePath)
             if (h == 0L) return null
             return WhisperEngine(h, modelId, WhisperNative.nativeIsMultilingual(h), speakerTurns, translate)
         }
 
         fun systemInfo(): String = runCatching { WhisperNative.ensureLoaded(); WhisperNative.nativeSystemInfo() }.getOrDefault("unavailable")
+
+        /** Which CPU kernel variant is active, e.g. "CPU: NEON ARM_FMA FP16_VA DOTPROD LLAMAFILE REPACK". */
+        fun backendInfo(nativeLibDir: String): String = runCatching { prepare(nativeLibDir); WhisperNative.nativeBackendInfo() }.getOrDefault("unavailable")
     }
 }

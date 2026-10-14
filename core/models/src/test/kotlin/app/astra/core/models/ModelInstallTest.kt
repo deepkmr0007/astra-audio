@@ -145,3 +145,19 @@ class ModelInstallTest {
         }
     }
 }
+
+class ThreadAdvisorTest {
+    @org.junit.Test fun picksPerformanceCores() {
+        // 4 × 1.8 GHz little + 3 × 2.85 GHz big + 1 × 3.2 GHz prime  (Snapdragon-style 4+3+1)
+        val f = listOf(1_800_000L, 1_800_000, 1_800_000, 1_800_000, 2_850_000, 2_850_000, 2_850_000, 3_200_000)
+        org.junit.Assert.assertEquals(4, ResourceAdvisor.performanceThreads(f, 6))
+        // 6 little + 2 big (Helio-style): use the 2 big cores
+        org.junit.Assert.assertEquals(2, ResourceAdvisor.performanceThreads(List(6) { 1_800_000L } + listOf(2_200_000L, 2_200_000L), 6))
+        // all equal (emulator / old phone): use them all, capped at 8
+        org.junit.Assert.assertEquals(4, ResourceAdvisor.performanceThreads(List(4) { 2_000_000L }, 2))
+        // unknown → fallback
+        org.junit.Assert.assertEquals(6, ResourceAdvisor.performanceThreads(emptyList(), 6))
+        // 1 prime + 3 big + 4 little where big = 0.7 × prime → prime alone is not enough
+        org.junit.Assert.assertEquals(4, ResourceAdvisor.performanceThreads(listOf(3_000_000L, 2_100_000, 2_100_000, 2_100_000, 1_500_000, 1_500_000, 1_500_000, 1_500_000), 6))
+    }
+}

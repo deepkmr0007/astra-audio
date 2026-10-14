@@ -84,7 +84,7 @@ class PipelineTest {
         val engine = ScriptedEngine()
         val store = MemoryCheckpointStore()
         val r = TranscriptionPipeline(engine, store).run("job", "item", chunks, { FloatArray(10) },
-            TranscribeOptions(initialPrompt = "Glossary: NHAI."), object : PipelineListener {}, CancelSignal())
+            TranscribeOptions(initialPrompt = "Glossary: NHAI.", skipSilence = false), object : PipelineListener {}, CancelSignal())
         r as PipelineResult.Done
         assertEquals(listOf("chunk0", "chunk1", "chunk2"), r.segments.map { it.text })
         assertEquals("hi", r.detectedLanguage)
@@ -99,14 +99,14 @@ class PipelineTest {
         val store = MemoryCheckpointStore()
         val signal = CancelSignal()
         val first = TranscriptionPipeline(ScriptedEngine(cancelOnChunk = 2, signal = signal), store)
-            .run("job", "item", chunks, { FloatArray(10) }, TranscribeOptions(), object : PipelineListener {}, signal)
+            .run("job", "item", chunks, { FloatArray(10) }, TranscribeOptions(skipSilence = false), object : PipelineListener {}, signal)
         assertEquals(PipelineResult.Cancelled(2, 3), first)
         // Simulate process death: checkpoint survives via JSON.
         val restored = Checkpoint.fromJson(store.load("job")!!.toJson())
         assertEquals(2, restored.completed.size)
         store.save(restored)
         val engine2 = ScriptedEngine()
-        val second = TranscriptionPipeline(engine2, store).run("job", "item", chunks, { FloatArray(10) }, TranscribeOptions(), object : PipelineListener {}, CancelSignal())
+        val second = TranscriptionPipeline(engine2, store).run("job", "item", chunks, { FloatArray(10) }, TranscribeOptions(skipSilence = false), object : PipelineListener {}, CancelSignal())
         second as PipelineResult.Done
         assertEquals(listOf(2000L), engine2.seenOffsets) // only the remaining chunk was processed
         assertEquals(3, second.segments.size)
@@ -116,7 +116,41 @@ class PipelineTest {
         val store = MemoryCheckpointStore()
         store.save(Checkpoint("job", "item", "something else", 3, listOf(ChunkResult(0, emptyList(), null)), null))
         val engine = ScriptedEngine()
-        TranscriptionPipeline(engine, store).run("job", "item", chunks, { FloatArray(10) }, TranscribeOptions(), object : PipelineListener {}, CancelSignal())
+        TranscriptionPipeline(engine, store).run("job", "item", chunks, { FloatArray(10) }, TranscribeOptions(skipSilence = false), object : PipelineListener {}, CancelSignal())
         assertEquals(3, engine.seenOffsets.size)
+    }
+
+    @Test fun silenceIsSkippedAndTimestampsMapBackToTheRecording() = runBlocking {
+        val rate = 16000
+        fun speech(s: Double) = FloatArray((s * rate).toInt()) { (0.3 * kotlin.math.sin(it * 0.07)).toFloat() }
+        fun quiet(s: Double) = FloatArray((s * rate).toInt())
+        // 1 s speech, 20 s silence, 1 s speech  (chunk starts at 60 s in the recording)
+        val pcm = speech(1.0) + quiet(20.0) + speech(1.0)
+        val seen = ArrayList<Int>()
+        val engine = object : TranscriptionEngine {
+            override val id = "fake"; override val displayName = "Fake"; override val verifiedOffline = true
+            override val capabilities = EngineCapabilities(setOf("*"), true, true, true, true, false)
+            override suspend fun transcribe(pcm: FloatArray, offsetMs: Long, options: TranscribeOptions, listener: TranscribeListener, cancel: CancelSignal): EngineResult {
+                seen.add(pcm.size)
+                val endMs = offsetMs + pcm.size * 1000L / rate
+                // One segment at the very end of the compacted audio = start of the 2nd burst … end.
+                return EngineResult.Success(listOf(Segment(endMs - 1000, endMs, "second", listOf(TokenInfo(" second", endMs - 900, endMs - 100, 0.9f)))), "en")
+            }
+        }
+        val r = TranscriptionPipeline(engine, MemoryCheckpointStore()).run("j", "i", listOf(ChunkSpec(0, 60_000, 82_000)), { pcm },
+            TranscribeOptions(), object : PipelineListener {}, CancelSignal()) as PipelineResult.Done
+        assertTrue("model saw ${seen[0]} samples instead of ${pcm.size}", seen[0] < pcm.size / 4)
+        val seg = r.segments.single()
+        assertEquals(82_000L, seg.endMs)
+        assertTrue("start ${seg.startMs}", seg.startMs in 80_700L..81_100L)
+        assertTrue(seg.tokens.single().startMs!! in 80_800L..81_200L)
+    }
+
+    @Test fun silentChunkNeverReachesTheModel() = runBlocking {
+        val engine = ScriptedEngine()
+        val r = TranscriptionPipeline(engine, MemoryCheckpointStore()).run("j", "i", listOf(ChunkSpec(0, 0, 30_000)), { FloatArray(16000 * 30) },
+            TranscribeOptions(), object : PipelineListener {}, CancelSignal()) as PipelineResult.Done
+        assertTrue(engine.seenOffsets.isEmpty())
+        assertTrue(r.segments.isEmpty())
     }
 }

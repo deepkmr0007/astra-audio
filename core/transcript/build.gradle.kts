@@ -17,6 +17,7 @@ kotlin {
 dependencies {
     api(project(":core:common"))
     api(project(":core:text"))
+    api(project(":core:audio"))
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.core)
 }

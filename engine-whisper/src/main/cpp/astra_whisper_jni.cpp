@@ -20,6 +20,7 @@
 
 #include "whisper.h"
 #include "ggml.h"
+#include "ggml-backend.h"
 
 namespace {
 
@@ -95,13 +96,55 @@ Java_app_astra_engine_whisper_WhisperNative_nativeSystemInfo(JNIEnv *env, jclass
     return env->NewStringUTF(whisper_print_system_info());
 }
 
+// Loads the CPU backend. With ASTRA_CPU_VARIANTS, ggml scores every libggml-cpu-<variant>.so in the
+// app's native library directory against this CPU's features and loads only the best match.
+// Safe to call repeatedly; returns the number of compute devices available afterwards.
+JNIEXPORT jint JNICALL
+Java_app_astra_engine_whisper_WhisperNative_nativeLoadBackends(JNIEnv *env, jclass, jstring libDir) {
+    static std::once_flag once;
+    const std::string dir = fromJString(env, libDir);
+    std::call_once(once, [&]() {
+        whisper_log_set(silent_log, nullptr);
+        ggml_log_set(silent_log, nullptr);
+#if defined(ASTRA_CPU_VARIANTS)
+        ggml_backend_load_all_from_path(dir.empty() ? nullptr : dir.c_str());
+#endif
+    });
+    return static_cast<jint>(ggml_backend_dev_count());
+}
+
+// Human-readable description of the compute backend in use, e.g.
+// "CPU (android_armv8.2_2): NEON DOTPROD FP16_VA" — shown on the About and job screens.
+JNIEXPORT jstring JNICALL
+Java_app_astra_engine_whisper_WhisperNative_nativeBackendInfo(JNIEnv *env, jclass) {
+    std::string out;
+    for (size_t i = 0; i < ggml_backend_reg_count(); ++i) {
+        ggml_backend_reg_t reg = ggml_backend_reg_get(i);
+        if (!out.empty()) out += "; ";
+        out += ggml_backend_reg_name(reg);
+        typedef ggml_backend_feature *(*get_features_t)(ggml_backend_reg_t);
+        auto get_features = (get_features_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_get_features");
+        if (get_features) {
+            std::string feats;
+            for (ggml_backend_feature *f = get_features(reg); f && f->name; ++f) {
+                if (std::strcmp(f->value, "1") == 0) { feats += " "; feats += f->name; }
+                else if (std::strcmp(f->name, "CPU_VARIANT") == 0 || std::strcmp(f->name, "BACKEND_NAME") == 0) { feats += " ["; feats += f->value; feats += "]"; }
+            }
+            if (!feats.empty()) out += ":" + feats;
+        }
+    }
+    if (out.empty()) out = "no backend loaded";
+    return env->NewStringUTF(out.c_str());
+}
+
 JNIEXPORT jlong JNICALL
 Java_app_astra_engine_whisper_WhisperNative_nativeInit(JNIEnv *env, jclass, jstring modelPath) {
     whisper_log_set(silent_log, nullptr);
+    if (ggml_backend_dev_count() == 0) return 0;  // CPU backend failed to load
     const std::string path = fromJString(env, modelPath);
     whisper_context_params cparams = whisper_context_default_params();
     cparams.use_gpu = false;      // CPU only: no GPU backend is compiled for Android in this build.
-    cparams.flash_attn = false;
+    cparams.flash_attn = true;    // fused attention kernels: faster and less memory on CPU
     whisper_context *ctx = whisper_init_from_file_with_params(path.c_str(), cparams);
     if (ctx == nullptr) return 0;
     auto *h = new Handle();

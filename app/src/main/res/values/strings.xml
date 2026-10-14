@@ -429,4 +429,15 @@
     <string name="about_principles_body">Local first. Offline by default. Every app-initiated internet request needs your fresh, specific approval. No accounts, ads, analytics, trackers or cloud backup. Raw engine output is never silently changed, and nothing is presented as more certain than it is.</string>
     <string name="about_licenses">Open-source licences</string>
     <string name="about_licenses_body">whisper.cpp and ggml — MIT License, © The ggml authors. OpenAI Whisper model weights — MIT License, © OpenAI. AndroidX, Jetpack Compose and Kotlin — Apache License 2.0. Full texts: THIRD_PARTY_NOTICES.md in the source code.</string>
+    <string name="transcribe_skip_silence">Skip silences (faster)</string>
+    <string name="transcribe_skip_silence_note">Long pauses are not sent to the model; timestamps still match the recording. Also prevents made-up text in silences.</string>
+    <string name="warn_speed">Transcribed %1$s of audio in %2$s on this phone (%3$s× real time).</string>
+    <string name="warn_live">Transcribed live while recording, on this phone.</string>
+    <string name="live_toggle">Live transcript while recording</string>
+    <string name="live_toggle_note">Text appears as you speak and the full transcript is ready moments after you tap Stop. Runs on this phone; uses more battery.</string>
+    <string name="live_title">Live transcript</string>
+    <string name="live_status">On this phone · transcribed up to %1$s</string>
+    <string name="live_catching_up">Catching up (%1$s behind)…</string>
+    <string name="live_finishing">Finishing the last few seconds…</string>
+    <string name="live_waiting">Text will appear here every 20–30 seconds.</string>
 </resources>
