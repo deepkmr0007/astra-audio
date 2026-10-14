@@ -44,7 +44,7 @@ class RealTranscriptionTest {
         InstrumentationRegistry.getInstrumentation().context.assets.open(name).use { it.readBytes() }
     } catch (e: Exception) { null }
 
-    @Test fun transcribesRealSpeechOnDevice() = runBlocking {
+    @Test fun transcribesRealSpeechOnDevice(): Unit = runBlocking {
         val modelBytes = asset("ggml-tiny.en.bin")
         val wavBytes = asset("jfk.wav")
         assumeTrue("real-model assets not bundled", modelBytes != null && wavBytes != null)

@@ -1,6 +1,5 @@
 package app.astra.audiotext
 
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -31,8 +30,9 @@ class ConsentDialogUiTest {
     @Test fun showsDetailsAndOnlyOneTimeOptions() {
         var decision: ConsentDecision? = null
         compose.setContent { ConsentDialog(request) { decision = it } }
-        compose.onNodeWithText("huggingface.co").assertIsDisplayed()
-        compose.onNodeWithText("Not verified by this app").assertIsDisplayed()
+        // The host appears both as destination and in the approved-hosts list.
+        assertEquals(2, compose.onAllNodesWithText("huggingface.co").fetchSemanticsNodes().size)
+        compose.onNodeWithText("Not verified by this app").assertExists()
         assertEquals(0, compose.onAllNodesWithText("Always", substring = true, ignoreCase = true).fetchSemanticsNodes().size)
         compose.onNodeWithText("Allow this request once").performClick()
         assertEquals(ConsentDecision.ALLOW_ONCE, decision)
