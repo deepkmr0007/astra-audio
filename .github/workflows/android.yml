@@ -33,7 +33,12 @@ jobs:
         with: { distribution: temurin, java-version: "17" }
       - uses: gradle/actions/setup-gradle@v4
       - name: Install NDK and CMake
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+        run: |
+          for i in 1 2 3; do
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0" > /dev/null && break
+            echo "sdkmanager attempt $i failed, retrying"; sleep 20
+          done
+          test -d "$ANDROID_HOME/ndk/27.2.12479018"
       - name: Check string resources (English + Hindi)
         run: python3 scripts/gen_strings.py && git diff --exit-code app/src/main/res/values app/src/main/res/values-hi
       - name: Unit tests
@@ -109,10 +114,10 @@ jobs:
         run: |
           set -e
           mkdir -p /tmp/models && cd /tmp/models
-          curl -sSfL -o ggml-tiny.en.bin "$HF/ggml-tiny.en.bin"
-          curl -sSfL -o ggml-base.en.bin "$HF/ggml-base.en.bin"
-          curl -sSfL -o ggml-base.bin    "$HF/ggml-base.bin"
-          curl -sSfL -o jfk.wav "$JFK"
+          curl -sSfL --retry 4 --retry-delay 5 -o ggml-tiny.en.bin "$HF/ggml-tiny.en.bin"
+          curl -sSfL --retry 4 --retry-delay 5 -o ggml-base.en.bin "$HF/ggml-base.en.bin"
+          curl -sSfL --retry 4 --retry-delay 5 -o ggml-base.bin    "$HF/ggml-base.bin"
+          curl -sSfL --retry 4 --retry-delay 5 -o jfk.wav "$JFK"
           printf '%s  %s\n' c78c86eb1a8faa21b369bcd33207cc90d64ae9df ggml-tiny.en.bin 137c40403d78fd54d454da0f9bd998f78703390c ggml-base.en.bin 465707469ff3a37a2b9b8d8f89f2f99de7299dac ggml-base.bin | sha1sum -c -
       - uses: gradle/actions/setup-gradle@v4
       - name: Build the native library for this runner
@@ -157,13 +162,18 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
       - name: Install NDK and CMake
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" "cmake;3.22.1" > /dev/null
+        run: |
+          for i in 1 2 3; do
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" "cmake;3.22.1" > /dev/null && break
+            echo "sdkmanager attempt $i failed, retrying"; sleep 20
+          done
+          test -d "$ANDROID_HOME/ndk/27.2.12479018"
       - name: Bundle a real model for the on-device speech test
         run: |
           set -e
           mkdir -p app/src/androidTest/assets
-          curl -sSfL -o app/src/androidTest/assets/ggml-tiny.en.bin "$HF/ggml-tiny.en.bin"
-          curl -sSfL -o app/src/androidTest/assets/jfk.wav "$JFK"
+          curl -sSfL --retry 4 --retry-delay 5 -o app/src/androidTest/assets/ggml-tiny.en.bin "$HF/ggml-tiny.en.bin"
+          curl -sSfL --retry 4 --retry-delay 5 -o app/src/androidTest/assets/jfk.wav "$JFK"
           echo "c78c86eb1a8faa21b369bcd33207cc90d64ae9df  app/src/androidTest/assets/ggml-tiny.en.bin" | sha1sum -c -
       - name: Instrumented tests on Android 14 emulator (x86_64)
         uses: reactivecircus/android-emulator-runner@v2
